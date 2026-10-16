@@ -1,0 +1,186 @@
+<?php
+$pageTitle = 'Shopping Cart';
+require_once 'includes/header.php';
+
+$cartItems = getCartItems();
+$subtotal = getCartTotal();
+$shipping = calculateShipping($subtotal);
+$total = $subtotal + $shipping;
+?>
+
+<div class="container my-4">
+    <h2 class="fw-bold mb-4"><i class="fas fa-shopping-cart"></i> Shopping Cart</h2>
+    
+    <?php if (empty($cartItems)): ?>
+        <div class="card text-center py-5">
+            <div class="card-body">
+                <i class="fas fa-shopping-cart fa-5x text-muted mb-3"></i>
+                <h4 class="text-muted mb-3">Your cart is empty</h4>
+                <a href="products.php" class="btn btn-primary btn-lg">
+                    <i class="fas fa-shopping-bag"></i> Start Shopping
+                </a>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="row g-4">
+            <!-- Cart Items -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-body">
+                        <?php foreach ($cartItems as $item): ?>
+                            <div class="row align-items-center mb-3 pb-3 border-bottom">
+                                <div class="col-3 col-md-2">
+                                    <?php if ($item['image_path']): ?>
+                                        <img src="<?php echo getProductImageUrl($item['image_path']); ?>" 
+                                             class="img-fluid rounded" alt="<?php echo displayTitle($item['title']); ?>">
+                                    <?php else: ?>
+                                        <div class="bg-light rounded d-flex align-items-center justify-content-center" style="height: 80px;">
+                                            <i class="fas fa-image fa-2x text-muted opacity-50"></i>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="col-5 col-md-4">
+                                    <h6 class="fw-bold mb-1">
+                                        <a href="product-detail.php?id=<?php echo $item['id']; ?>" class="text-decoration-none text-dark">
+                                            <small><?php echo displayTitle($item['title']); ?> x<?php echo $item['quantity']; ?></small>
+                                        </a>
+                                    </h6>
+                                    <?php if (!empty($item['discount_price']) && $item['discount_price'] < $item['price']): ?>
+                                        <div>
+                                            <span class="text-success fw-bold"><?php echo formatCurrency($item['discount_price']); ?></span>
+                                            <span class="text-muted text-decoration-line-through small ms-1"><?php echo formatCurrency($item['price']); ?></span>
+                                        </div>
+                                    <?php else: ?>
+                                        <p class="text-success fw-bold mb-0"><?php echo formatCurrency($item['price']); ?></p>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="col-4 col-md-3">
+                                    <div class="input-group input-group-sm">
+                                        <button class="btn btn-outline-secondary" 
+                                                onclick="updateQuantity(<?php echo $item['id']; ?>, <?php echo $item['quantity'] - 1; ?>, <?php echo $item['stock_quantity']; ?>)">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                        <input type="number" class="form-control text-center" 
+                                               value="<?php echo $item['quantity']; ?>" 
+                                               min="1" 
+                                               max="<?php echo $item['stock_quantity']; ?>" 
+                                               readonly>
+                                        <button class="btn btn-outline-secondary" 
+                                                onclick="updateQuantity(<?php echo $item['id']; ?>, <?php echo $item['quantity'] + 1; ?>, <?php echo $item['stock_quantity']; ?>)"
+                                                <?php echo ($item['quantity'] >= $item['stock_quantity']) ? 'disabled' : ''; ?>>
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                    <?php if ($item['quantity'] >= $item['stock_quantity']): ?>
+                                        <small class="text-muted d-block mt-1">Max available</small>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="col-12 col-md-3 text-end mt-2 mt-md-0">
+                                    <button class="btn btn-sm btn-outline-danger" onclick="removeFromCart(<?php echo $item['id']; ?>)">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Order Summary -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="fw-bold mb-3">Order Summary</h5>
+                        
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Subtotal</span>
+                            <span><?php echo formatCurrency($subtotal); ?></span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Shipping</span>
+                            <span><?php echo $shipping > 0 ? formatCurrency($shipping) : 'FREE'; ?></span>
+
+                        <hr>
+                        
+                        <div class="d-flex justify-content-between mb-3">
+                            <strong>Total</strong>
+                            <strong class="text-success"><?php echo formatCurrency($total); ?></strong>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <a href="checkout.php" class="btn btn-success btn-lg">
+                                <i class="fas fa-lock"></i> Proceed to Checkout
+                            </a>
+                            <a href="products.php" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left"></i> Continue Shopping
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+</div>
+
+<script>
+function updateQuantity(productId, quantity, maxStock) {
+    // Check if quantity is below 1
+    if (quantity < 1) {
+        if (!confirm('Remove this item from cart?')) return;
+        quantity = 0;
+    }
+    
+    // Validate against stock limit
+    if (quantity > maxStock) {
+        alert(`Only ${maxStock} items available in stock`);
+        return;
+    }
+    
+    // Send update request
+    fetch('cart-action.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `action=update&product_id=${productId}&quantity=${quantity}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to update cart');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while updating cart');
+    });
+}
+
+function removeFromCart(productId) {
+    if (!confirm('Remove this item from cart?')) return;
+    
+    fetch('cart-action.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `action=remove&product_id=${productId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to remove item');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while removing item');
+    });
+}
+</script>
+
+<?php require_once 'includes/footer.php'; ?>
