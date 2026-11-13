@@ -22,6 +22,12 @@ if (!$orderId || !$paymentId || !$signature) {
 try {
     $conn = getDBConnection();
     
+    // Ensure payment_gateway_order_id column exists
+    $colCheck = $conn->query("SHOW COLUMNS FROM `orders` LIKE 'payment_gateway_order_id'");
+    if ($colCheck && $colCheck->num_rows === 0) {
+        $conn->query("ALTER TABLE `orders` ADD COLUMN `payment_gateway_order_id` VARCHAR(255) NULL AFTER `id`");
+    }
+
     // Get order details including Razorpay order ID
     $stmt = $conn->prepare("SELECT order_number, payment_gateway_order_id, total FROM orders WHERE id = ? AND user_id = ?");
     $stmt->bind_param("ii", $orderId, $_SESSION['user_id']);

@@ -2,8 +2,12 @@
 require_once '../config/config.php';
 require_once '../includes/functions.php';
 
+$redirect = isset($_POST['redirect']) && !empty($_POST['redirect']) 
+    ? $_POST['redirect'] 
+    : (isset($_GET['redirect']) && !empty($_GET['redirect']) ? $_GET['redirect'] : SITE_URL);
+
 if (isUserLoggedIn()) {
-    header('Location: ' . SITE_URL);
+    header('Location: ' . $redirect);
     exit;
 }
 
@@ -31,7 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['user_name'] = $user['name'];
                 
-                $redirect = isset($_GET['redirect']) ? $_GET['redirect'] : SITE_URL;
                 header('Location: ' . $redirect);
                 exit;
             }
@@ -111,6 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php endif; ?>
                         
                         <form method="POST" action="" autocomplete="off">
+                            <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">
                             <div class="mb-3">
                                 <label class="form-label">Email</label>
                                 <input type="email" class="form-control" name="email" required autocomplete="off">
@@ -135,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </form>
                         
                         <div class="text-center">
-                            <p class="mb-0">Don't have an account? <a href="signup.php" class="text-decoration-none fw-bold">Sign Up</a></p>
+                            <p class="mb-0">Don't have an account? <a href="signup.php<?php echo !empty($redirect) && $redirect !== SITE_URL ? '?redirect=' . urlencode($redirect) : ''; ?>" class="text-decoration-none fw-bold">Sign Up</a></p>
                         </div>
                         
                         <hr class="my-3">

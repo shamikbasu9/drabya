@@ -49,8 +49,13 @@ $conn->begin_transaction();
 try {
     // Create order
     $stmt = $conn->prepare("INSERT INTO orders (user_id, order_number, subtotal, tax, shipping_charge, discount, total, coupon_id, shipping_address_id, payment_method, payment_status, order_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'processing')");
-    $stmt->bind_param("isddddiiis", $userId, $orderNumber, $subtotal, $tax, $shipping, $discount, $total, $couponId, $addressId, $paymentMethod);
-    $stmt->execute();
+    if (!$stmt) {
+        throw new Exception("Failed to prepare order statement: " . $conn->error);
+    }
+    $stmt->bind_param("isdddddiis", $userId, $orderNumber, $subtotal, $tax, $shipping, $discount, $total, $couponId, $addressId, $paymentMethod);
+    if (!$stmt->execute()) {
+        throw new Exception("Failed to execute order statement: " . $stmt->error);
+    }
     $orderId = $conn->insert_id;
     $stmt->close();
     
@@ -60,14 +65,24 @@ try {
         $itemPrice = getProductPrice($item);
         
         $stmt = $conn->prepare("INSERT INTO order_items (order_id, product_id, product_title, price, quantity) VALUES (?, ?, ?, ?, ?)");
+        if (!$stmt) {
+            throw new Exception("Failed to prepare item statement: " . $conn->error);
+        }
         $stmt->bind_param("iisdi", $orderId, $item['id'], $item['title'], $itemPrice, $item['quantity']);
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            throw new Exception("Failed to execute item statement: " . $stmt->error);
+        }
         $stmt->close();
         
         // Update stock
         $stmt = $conn->prepare("UPDATE products SET stock_quantity = stock_quantity - ?, sales_count = sales_count + ? WHERE id = ?");
+        if (!$stmt) {
+            throw new Exception("Failed to prepare stock update statement: " . $conn->error);
+        }
         $stmt->bind_param("iii", $item['quantity'], $item['quantity'], $item['id']);
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            throw new Exception("Failed to execute stock update: " . $stmt->error);
+        }
         $stmt->close();
     }
     

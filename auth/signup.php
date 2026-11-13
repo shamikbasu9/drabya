@@ -2,8 +2,12 @@
 require_once '../config/config.php';
 require_once '../includes/functions.php';
 
+$redirect = isset($_POST['redirect']) && !empty($_POST['redirect']) 
+    ? $_POST['redirect'] 
+    : (isset($_GET['redirect']) && !empty($_GET['redirect']) ? $_GET['redirect'] : SITE_URL);
+
 if (isUserLoggedIn()) {
-    header('Location: ' . SITE_URL);
+    header('Location: ' . $redirect);
     exit;
 }
 
@@ -38,14 +42,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param("ssss", $name, $email, $phone, $hashedPassword);
             
             if ($stmt->execute()) {
-                $success = 'Account created successfully! Please login.';
+                $userId = $conn->insert_id;
+                
+                // Auto login immediately after signup
+                $_SESSION['user_id'] = $userId;
+                $_SESSION['user_name'] = $name;
+                
+                $stmt->close();
+                $conn->close();
+                
+                header('Location: ' . $redirect);
+                exit;
             } else {
                 $error = 'Failed to create account';
             }
         }
         
-        $stmt->close();
-        $conn->close();
+        if (isset($stmt) && $stmt) $stmt->close();
+        if (isset($conn) && $conn) $conn->close();
     }
 }
 ?>
@@ -127,6 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php endif; ?>
                         
                         <form method="POST" action="" autocomplete="off">
+                            <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Full Name *</label>
@@ -168,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </form>
                         
                         <div class="text-center">
-                            <p class="mb-0">Already have an account? <a href="login.php" class="text-decoration-none fw-bold">Login</a></p>
+                            <p class="mb-0">Already have an account? <a href="login.php<?php echo !empty($redirect) && $redirect !== SITE_URL ? '?redirect=' . urlencode($redirect) : ''; ?>" class="text-decoration-none fw-bold">Login</a></p>
                         </div>
                         
                         <hr class="my-3">

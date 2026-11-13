@@ -91,32 +91,33 @@ $total = $subtotal + $shipping;
             
             <!-- Order Summary -->
             <div class="col-lg-4">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="fw-bold mb-3">Order Summary</h5>
-                        
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Subtotal</span>
-                            <span><?php echo formatCurrency($subtotal); ?></span>
-                        </div>
-                        
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Shipping</span>
-                            <span><?php echo $shipping > 0 ? formatCurrency($shipping) : 'FREE'; ?></span>
-
-                        <hr>
+                <div class="card sticky-top shadow-sm" style="top: 20px;">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-4">Order Summary</h5>
                         
                         <div class="d-flex justify-content-between mb-3">
-                            <strong>Total</strong>
-                            <strong class="text-success"><?php echo formatCurrency($total); ?></strong>
+                            <span class="text-muted">Subtotal</span>
+                            <span class="fw-semibold"><?php echo formatCurrency($subtotal); ?></span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-muted">Shipping</span>
+                            <span class="fw-semibold"><?php echo $shipping > 0 ? formatCurrency($shipping) : 'FREE'; ?></span>
+                        </div>
+
+                        <hr class="my-3">
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <strong class="fs-5">Total</strong>
+                            <strong class="text-success fs-5"><?php echo formatCurrency($total); ?></strong>
                         </div>
                         
                         <div class="d-grid gap-2">
                             <a href="checkout.php" class="btn btn-success btn-lg">
-                                <i class="fas fa-lock"></i> Proceed to Checkout
+                                <i class="fas fa-lock me-2"></i> Proceed to Checkout
                             </a>
                             <a href="products.php" class="btn btn-outline-secondary">
-                                <i class="fas fa-arrow-left"></i> Continue Shopping
+                                <i class="fas fa-arrow-left me-2"></i> Continue Shopping
                             </a>
                         </div>
                     </div>

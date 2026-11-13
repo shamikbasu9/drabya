@@ -53,9 +53,11 @@ function isAdminLoggedIn() {
     return isset($_SESSION['admin_id']);
 }
 
-function requireUserLogin() {
+function requireUserLogin($target = 'login') {
     if (!isUserLoggedIn()) {
-        header('Location: ' . SITE_URL . '/auth/login.php');
+        $currentPage = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+        $page = ($target === 'signup') ? '/auth/signup.php' : '/auth/login.php';
+        header('Location: ' . SITE_URL . $page . '?redirect=' . urlencode($currentPage));
         exit;
     }
 }

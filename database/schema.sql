@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS coupons (
 
 CREATE TABLE IF NOT EXISTS orders (
     id INT PRIMARY KEY AUTO_INCREMENT,
+    payment_gateway_order_id VARCHAR(255) DEFAULT NULL,
     user_id INT NOT NULL,
     order_number VARCHAR(50) UNIQUE NOT NULL,
     subtotal DECIMAL(10, 2) NOT NULL,

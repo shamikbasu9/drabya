@@ -1,7 +1,10 @@
 <?php
+require_once 'config/config.php';
+require_once 'includes/functions.php';
+requireUserLogin('signup');
+
 $pageTitle = 'Checkout';
 require_once 'includes/header.php';
-requireUserLogin();
 
 $cartItems = getCartItems();
 if (empty($cartItems)) {
@@ -190,7 +193,7 @@ $conn->close();
                         <strong class="text-success"><?php echo formatCurrency($total); ?></strong>
                     </div>
                     
-                    <button onclick="placeOrder()" class="btn btn-success btn-lg w-100">
+                    <button type="button" id="placeOrderBtn" onclick="placeOrder(event)" class="btn btn-success btn-lg w-100">
                         <i class="fas fa-check"></i> Place Order
                     </button>
                 </div>
@@ -203,235 +206,224 @@ $conn->close();
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
 <script>
-async function placeOrder() {
-    // For hidden input, just get the value directly
-    const paymentMethod = document.querySelector('input[name="payment_method"]');
-    
-    if (!paymentMethod || !paymentMethod.value) {
-        alert('Please select a payment method');
-        return;
-    }
-    
-    // Disable button to prevent double submission
-    const btn = event.target;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-    
-    let addressId = document.getElementById('addressSelect')?.value;
-    
-    // If no saved address, create one from the form
-    if (!addressId) {
-        const addressForm = document.getElementById('addressForm');
-        if (!addressForm.checkValidity()) {
-            alert('Please fill in all required address fields');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> Place Order';
-            return;
-        }
-        
-        const formData = new FormData(addressForm);
-        formData.append('is_default', '1');
-        
-        try {
-            const response = await fetch('save-address.php', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await response.json();
-            
-            if (!result.success) {
-                alert('Failed to save address');
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-check"></i> Place Order';
-                return;
-            }
-            
-            addressId = result.address_id;
-        } catch (error) {
-            alert('Error saving address');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> Place Order';
-            return;
-        }
-    }
-    
-    // Create order with better error handling
-    try {
-        const response = await fetch('process-order.php', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `payment_method=${paymentMethod.value}&address_id=${addressId}`
-        });
-        
-        // Get the response as text first to see what we're getting
-        const text = await response.text();
-        console.log('Raw response:', text);
-        
-        // Try to parse as JSON
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (e) {
-            console.error('JSON parse error:', e);
-            console.error('Response text:', text);
-            alert('Server returned an invalid response. Check console for details.');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> Place Order';
-            return;
-        }
-        
-        if (data.success) {
-            // Create Razorpay order
-            createRazorpayOrder(data.order_id, data.order_number, data.order_amount);
-        } else {
-            alert(data.message || 'Failed to place order');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> Place Order';
-        }
-    } catch (error) {
-        console.error('Fetch error:', error);
-        alert('An error occurred. Please try again.');
+function resetButton() {
+    const btn = document.getElementById('placeOrderBtn');
+    if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-check"></i> Place Order';
     }
 }
 
+async function placeOrder(e) {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const btn = document.getElementById('placeOrderBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    }
+
+    try {
+        const paymentMethod = document.querySelector('input[name="payment_method"]');
+        if (!paymentMethod || !paymentMethod.value) {
+            alert('Please select a payment method');
+            resetButton();
+            return;
+        }
+
+        let addressId = document.getElementById('addressSelect')?.value;
+
+        // If no saved address, create one from the form
+        if (!addressId) {
+            const addressForm = document.getElementById('addressForm');
+            if (!addressForm) {
+                alert('Please provide a shipping address');
+                resetButton();
+                return;
+            }
+
+            if (!addressForm.reportValidity()) {
+                resetButton();
+                return;
+            }
+
+            const formData = new FormData(addressForm);
+            formData.append('is_default', '1');
+
+            try {
+                const response = await fetch('save-address.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    alert(result.message || 'Failed to save address');
+                    resetButton();
+                    return;
+                }
+
+                addressId = result.address_id;
+            } catch (error) {
+                console.error('Error saving address:', error);
+                alert('Error saving address. Please try again.');
+                resetButton();
+                return;
+            }
+        }
+
+        // Create order
+        const response = await fetch('process-order.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'payment_method=' + encodeURIComponent(paymentMethod.value) + '&address_id=' + encodeURIComponent(addressId)
+        });
+
+        const text = await response.text();
+        console.log('Order creation response:', text);
+
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (err) {
+            console.error('JSON parse error:', err, text);
+            alert('Server error: ' + text.substring(0, 150));
+            resetButton();
+            return;
+        }
+
+        if (data.success) {
+            createRazorpayOrder(data.order_id, data.order_number, data.order_amount);
+        } else {
+            alert(data.message || 'Failed to place order');
+            resetButton();
+        }
+    } catch (error) {
+        console.error('placeOrder error:', error);
+        alert('An unexpected error occurred: ' + error.message);
+        resetButton();
+    }
+}
+
 function createRazorpayOrder(orderId, orderNumber, amount) {
-    const btn = document.querySelector('button[onclick*="placeOrder"]');
-    
-    // Show loading state
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
-    
-    // Format amount to 2 decimal places to avoid floating point precision issues
+    const btn = document.getElementById('placeOrderBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparing Payment...';
+    }
+
     const formattedAmount = parseFloat(amount).toFixed(2);
-    
+
     fetch('create-razorpay-order.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: `order_id=${orderId}&amount=${formattedAmount}`
+        body: 'order_id=' + encodeURIComponent(orderId) + '&amount=' + encodeURIComponent(formattedAmount)
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
+    .then(async response => {
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            throw new Error('Invalid gateway response: ' + text.substring(0, 150));
         }
-        return response.json();
     })
     .then(data => {
-        if (data.success) {
+        if (data.success && data.razorpay_order_id) {
             initiateRazorpayPayment(orderId, orderNumber, data.razorpay_order_id, data.amount);
         } else {
-            throw new Error(data.message || 'Failed to initialize payment');
+            throw new Error(data.message || 'Failed to initialize payment gateway');
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        
-        // Show error message to user
-        const errorMessage = error.message || 'Failed to process payment. Please try again.';
-        showAlert('error', 'Payment Error', errorMessage);
-        
-        // Re-enable the button
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock"></i> Place Order';
-        }
+        console.error('Razorpay order error:', error);
+        alert(error.message || 'Payment initiation failed. Please try again.');
+        resetButton();
     });
 }
 
-// Helper function to show alerts
-function showAlert(type, title, message) {
-    // Create alert element
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
-    alertDiv.role = 'alert';
-    alertDiv.innerHTML = `
-        <strong>${title}</strong> ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    `;
-    
-    // Insert before the payment form
-    const paymentForm = document.querySelector('.payment-method');
-    if (paymentForm) {
-        paymentForm.parentNode.insertBefore(alertDiv, paymentForm);
-    } else {
-        document.body.prepend(alertDiv);
-    }
-    
-    // Auto-dismiss after 10 seconds
-    setTimeout(() => {
-        const alert = bootstrap.Alert.getOrCreateInstance(alertDiv);
-        alert.close();
-    }, 10000);
-}
-
 function initiateRazorpayPayment(orderId, orderNumber, razorpayOrderId, amount) {
+    const btn = document.getElementById('placeOrderBtn');
+
+    if (typeof Razorpay === 'undefined') {
+        alert('Razorpay payment library failed to load. Please disable ad-blockers or check your internet connection.');
+        resetButton();
+        return;
+    }
+
     const options = {
-        key: '<?php echo RAZORPAY_KEY; ?>',
+        key: <?php echo json_encode(RAZORPAY_KEY); ?>,
         amount: amount, // Amount in paise
         currency: 'INR',
-        name: '<?php echo SITE_NAME; ?>',
+        name: <?php echo json_encode(SITE_NAME); ?>,
         description: 'Order #' + orderNumber,
         order_id: razorpayOrderId,
         prefill: {
-            name: '<?php echo htmlspecialchars($currentUser['name']); ?>',
-            email: '<?php echo htmlspecialchars($currentUser['email']); ?>',
-            contact: '<?php echo htmlspecialchars($currentUser['phone'] ?? ''); ?>'
-        },
-        config: {
-            display: {
-                blocks: {
-                    upi: {
-                        name: 'Pay using UPI',
-                        instruments: [
-                            {
-                                method: 'upi'
-                            }
-                        ]
-                    }
-                },
-                sequence: ['block.upi'],
-                preferences: {
-                    show_default_blocks: false
-                }
-            }
+            name: <?php echo json_encode($currentUser['name'] ?? ''); ?>,
+            email: <?php echo json_encode($currentUser['email'] ?? ''); ?>,
+            contact: <?php echo json_encode($currentUser['phone'] ?? ''); ?>
         },
         theme: {
             color: '#2e7d32'
         },
         handler: function(response) {
-            // Payment successful
             verifyPayment(orderId, response.razorpay_payment_id, response.razorpay_signature);
         },
         modal: {
             ondismiss: function() {
-                // Payment cancelled
-                alert('Payment cancelled. Your order has been saved. You can complete payment later from orders page.');
+                alert('Payment cancelled. Your order has been saved. You can complete payment later from your orders page.');
                 window.location.href = 'orders.php';
             }
         }
     };
-    
-    const rzp = new Razorpay(options);
-    rzp.open();
+
+    try {
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function(response) {
+            console.error('Payment failed:', response.error);
+            alert('Payment failed: ' + (response.error.description || response.error.reason || 'Unknown error'));
+        });
+        rzp.open();
+    } catch (e) {
+        console.error('Razorpay open error:', e);
+        alert('Failed to open payment modal: ' + e.message);
+        resetButton();
+    }
 }
 
 function verifyPayment(orderId, paymentId, signature) {
+    const btn = document.getElementById('placeOrderBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Verifying Payment...';
+    }
+
     fetch('verify-payment.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: `order_id=${orderId}&payment_id=${paymentId}&signature=${signature}`
+        body: 'order_id=' + encodeURIComponent(orderId) + '&payment_id=' + encodeURIComponent(paymentId) + '&signature=' + encodeURIComponent(signature)
     })
-    .then(response => response.json())
+    .then(async response => {
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            throw new Error('Invalid verification response: ' + text.substring(0, 150));
+        }
+    })
     .then(data => {
         if (data.success) {
             window.location.href = 'order-success.php?order=' + orderId;
         } else {
-            alert('Payment verification failed. Please contact support.');
+            alert('Payment verification failed: ' + (data.message || 'Please contact support.'));
             window.location.href = 'orders.php';
         }
+    })
+    .catch(error => {
+        console.error('Verification error:', error);
+        alert('Error during verification: ' + error.message);
+        window.location.href = 'orders.php';
     });
 }
 </script>

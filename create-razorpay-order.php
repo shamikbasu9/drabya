@@ -110,8 +110,7 @@ try {
             CURLOPT_USERPWD => $api_key . ':' . $api_secret,
             CURLOPT_POSTFIELDS => json_encode($orderData),
             CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'X-Razorpay-Account: ' . $api_key
+                'Content-Type: application/json'
             ],
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
@@ -137,9 +136,21 @@ try {
         if ($httpCode === 200 && isset($response['id'])) {
             // Update order with Razorpay order ID in the database
             $conn = getDBConnection();
+            
+            // Auto-add column if not yet present in orders table
+            $colCheck = $conn->query("SHOW COLUMNS FROM `orders` LIKE 'payment_gateway_order_id'");
+            if ($colCheck && $colCheck->num_rows === 0) {
+                $conn->query("ALTER TABLE `orders` ADD COLUMN `payment_gateway_order_id` VARCHAR(255) NULL AFTER `id`");
+            }
+
             $stmt = $conn->prepare("UPDATE orders SET payment_gateway_order_id = ? WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception("Database error: " . $conn->error);
+            }
             $stmt->bind_param("si", $response['id'], $orderId);
-            $stmt->execute();
+            if (!$stmt->execute()) {
+                throw new Exception("Failed to save gateway order ID: " . $stmt->error);
+            }
             $stmt->close();
             $conn->close();
             
